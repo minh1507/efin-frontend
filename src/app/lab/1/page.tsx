@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import axios from "axios";
+import { Separator } from "@/components/ui/separator";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export default function Lab1() {
     const [isConnected, setIsConnected] = useState(false);
@@ -15,13 +17,38 @@ export default function Lab1() {
     const [ssid, setSsid] = useState("");
     const [password, setPassword] = useState("");
     const [leds, setLeds] = useState<{ name: string; status: boolean }[]>([]);
+    const [dht, setDht] = useState({
+        temperature: 1,
+        humidity: 2
+    })
 
     useEffect(() => {
         getStatusWifi();
         fetchLeds();
+        if (isConnected) {
+            const interval = setInterval(() => {
+                fetchDht();
+            }, 2000);
+    
+            return () => clearInterval(interval); // Cleanup interval on unmount or dependency change
+        }
     }, [isConnected]);
 
-    // Fetch LED data dynamically
+    async function fetchDht() {
+        try {
+            const response = await axios.get("http://localhost:4200/api/v1/sts/lab-1/dht");
+            const ledData = response.data.data
+
+            setDht(prevUser => ({
+                ...prevUser,
+                temperature: Number(ledData.temperature),
+                humidity: Number(ledData.humidity)
+            }));
+        } catch (error) {
+            console.error("Error fetching LEDs:", error);
+        }
+    }
+
     async function fetchLeds() {
         try {
             const response = await axios.get("http://localhost:4200/api/v1/sts/lab-1/get-leds");
@@ -71,14 +98,12 @@ export default function Lab1() {
     async function toggleSwitch(index: number) {
         if (!isConnected) return;
 
-        // Update local state
         const updatedLeds = leds.map((led, i) =>
             i === index ? { ...led, status: !led.status } : led
         );
         setLeds(updatedLeds);
 
         try {
-            // Send all LED states to the API
             await axios.post("http://localhost:4200/api/v1/sts/lab-1/set-leds", {
                 leds: updatedLeds.map(led => ({
                     name: led.name,
@@ -110,6 +135,7 @@ export default function Lab1() {
 
     return (
         <div className="p-4">
+            <h1 className="text-4xl font-bold mb-3">Connect</h1>
             <div className="flex items-center space-x-4">
                 {isConnected ? (
                     <Wifi className="text-green-500 w-6 h-6" />
@@ -121,6 +147,8 @@ export default function Lab1() {
                 </span>
             </div>
 
+            <Separator className="mt-3" />
+            <h1 className="text-4xl font-bold mt-2">Leds</h1>
             <div className={`grid grid-cols-1 gap-4 mt-6 ${!isConnected ? "opacity-50 pointer-events-none" : ""}`}>
                 {leds.map((led, index) => (
                     <Card key={index} className="p-4 flex justify-between items-center w-60">
@@ -147,6 +175,31 @@ export default function Lab1() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+            <Separator className="mt-3" />
+            <h1 className="text-4xl font-bold mt-2">Sensor</h1>
+            <Table className="mt-3">
+                <TableHeader>
+                    <TableRow>
+                        <TableHead className="w-1/2">Parameter</TableHead>
+                        <TableHead>Value</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    <TableRow>
+                        <TableCell>Humidity</TableCell>
+                        <TableCell>{dht.humidity}%</TableCell>
+                    </TableRow>
+                    <TableRow>
+                        <TableCell>Temperature</TableCell>
+                        <TableCell>{dht.temperature}°C</TableCell>
+                    </TableRow>
+                </TableBody>
+            </Table>
+
+            <Button onClick={fetchDht} className="mt-4" disabled={!isConnected}>
+                Refresh
+            </Button>
+
         </div>
     );
 }
